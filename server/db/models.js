@@ -1,8 +1,7 @@
 /* eslint-disable no-use-before-define */
-
 const mongoose = require('mongoose');
 
-mongoose.Promise = global.Promise;
+// mongoose.Promise = global.Promise;
 const { Schema } = mongoose;
 
 const Player = mongoose.model('Player', playerSchema);

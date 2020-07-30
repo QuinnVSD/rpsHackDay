@@ -1,9 +1,20 @@
+/* eslint-disable no-console */
+
 const express = require('express');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 
 const db = require('./db');
 
+const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
+
 const app = express();
+
+mongoose.connect(url, { useNewUrlParser: true });
+const { connection } = mongoose;
+connection.once('open', () => {
+  console.log('MongoDB database connection established successfully');
+});
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -33,6 +44,23 @@ function checkP1BeatsP2(moveP1, moveP2) {
 function checkUserInGame(game, uId) {
   return (game.p1.name === uId || game.p2.name === uId);
 }
+
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
+
+app.get('/players', async (req, res, next) => {
+  const players = await db.getAllPlayers();
+  res.status(200)
+    .json(players);
+});
+
+app.post('/players/:username', async (req, res, next) => {
+  const { username } = req.params;
+  const players = await db.addPlayer(username);
+  res.status(200)
+    .json(players);
+});
 
 app.get('/result/:gId', async (req, res, next) => {
   const { gId } = req.params;
@@ -88,8 +116,6 @@ module.exports = app;
 //   }
 // }
 
-
-
 // // submits move AND RETURNS boolean representing round completion (to prevent double db access)
 // function submitMove(game, uId, move) {
 //   const activePlayer = game.p1.name === uId ? 'p1' : 'p2';
@@ -131,4 +157,3 @@ module.exports = app;
 //     next(errWrongGame());
 //   }
 // });
-

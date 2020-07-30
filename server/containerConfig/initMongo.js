@@ -12,29 +12,30 @@ db.createUser(
   },
 );
 
-db.createCollection('active_games');
-db.createCollection('completed_games');
-db.createCollection('secret_moves');
-db.active_games.insert({
-  id: 0,
-  p1: {
-    name: 'Lucius',
-    moves: ['R', 'R'],
-    score: 1,
-  },
-  p2: {
-    name: 'Vesper',
-    moves: ['R', 'S'],
-    score: 0,
-  },
-  scoreLimit: 2,
-  p1Wins: null,
-});
-db.secret_moves.insert({
-  gameId: 0,
-  p1: 'R',
-  p2: null,
-});
+// db.createCollection('players');
+// db.createCollection('activeGanes');
+// db.createCollection('finishedGames');
+// db.createCollection('pendingMoves');
+// db.active_games.insert({
+//   id: 0,
+//   p1: {
+//     name: 'Lucius',
+//     moves: ['R', 'R'],
+//     score: 1,
+//   },
+//   p2: {
+//     name: 'Vesper',
+//     moves: ['R', 'S'],
+//     score: 0,
+//   },
+//   scoreLimit: 2,
+//   p1Wins: null,
+// });
+// db.secret_moves.insert({
+//   gameId: 0,
+//   p1: 'R',
+//   p2: null,
+// });
 
 // const { MongoClient } = require('mongodb');
 
