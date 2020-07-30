@@ -33,8 +33,8 @@ function errWrongGame() {
 
 function checkP1BeatsP2(moveP1, moveP2) {
   if ((moveP1 === 'R' && moveP2 === 'S')
-  || (moveP1 === 'S' && moveP2 === 'P')
-  || (moveP1 === 'P' && moveP2 === 'R')) {
+    || (moveP1 === 'S' && moveP2 === 'P')
+    || (moveP1 === 'P' && moveP2 === 'R')) {
     return true;
   }
   return false;
@@ -49,17 +49,43 @@ app.get('/', (req, res) => {
   res.send('Hello World!');
 });
 
+// post request to / route clears the databases
+app.post('/', async (req, res) => {
+  await db.clearAllTables(() => {
+    res.status(204)
+      .send();
+  });
+});
+
 app.get('/players', async (req, res, next) => {
-  const players = await db.getAllPlayers();
-  res.status(200)
-    .json(players);
+  await db.getAllPlayers((players) => {
+    res.status(200)
+      .json(players);
+  });
+});
+
+app.get('/players/:username', async (req, res, next) => {
+  const { username } = req.params;
+  try {
+    await db.getPlayerByName(username, (player) => {
+      res.status(200)
+        .json(player);
+    });
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.post('/players/:username', async (req, res, next) => {
   const { username } = req.params;
-  const players = await db.addPlayer(username);
-  res.status(200)
-    .json(players);
+  try {
+    await db.createPlayer(username, () => {
+      res.status(201)
+        .send();
+    });
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.get('/result/:gId', async (req, res, next) => {
