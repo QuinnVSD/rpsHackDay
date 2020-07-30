@@ -57,9 +57,15 @@ app.get('/game/:gId/:uId', async (req, res, next) => {
 app.post('/game/:gId/:uId', async (req, res, next) => {
   const { gId, uId } = req.params;
   const game = games.find((g) => g.id === gId);
-  if (game !== undefined) {
-    res.status(200)
-      .json(game);
+  if (game !== undefined && checkUserInGame(game, uId)) {
+    try {
+      submitMove();
+      res.status(200)
+        .json(game);
+    } catch (e) {
+      res.status(200)
+        .json(game);
+    }
   } else {
     next(errInexistentGame());
   }
@@ -67,7 +73,7 @@ app.post('/game/:gId/:uId', async (req, res, next) => {
 
 app.get('/result/:gId', (req, res, next) => {
   const { gId } = req.params;
-  const game = games.find(g => g.id === gId);
+  const game = games.find((g) => g.id === gId);
   if (game !== undefined) {
     res.status(200)
       .json(game);
