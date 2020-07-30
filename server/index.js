@@ -1,8 +1,11 @@
-const app = require('./app');
+const express = require('express');
+// const app = require('./app');
 
 // app.use((req, res) => { res.status(404).send('Unable to find the requested resource!'); });
 
-app.get('/', async (req, res) => {
+const app = express();
+
+app.get('/', (req, res) => {
   console.log('hello');
   res.send('Hello World!');
 });
