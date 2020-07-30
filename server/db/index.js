@@ -1,21 +1,15 @@
-const { MongoClient, ObjectID } = require('mongodb');
-const mongoose = require('mongoose');
+/* eslint-disable no-console */
+
 const PlayerModel = require('./models/PlayerModel');
 const ActiveGameModel = require('./models/ActiveGameModel');
 const FinishedGameModel = require('./models/FinishedGameModel');
 const PendingMoveModel = require('./models/PendingMoveModel');
 
-// const { db } = mongoose.connection;
-
-// const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
-
-// mongoose.connect(url, { useNewUrlParser: true });
-
 async function clearAllTables(callback) {
-  await PlayerModel.deleteMany({}, () => { console.log ('all player data removed'); });
-  await ActiveGameModel.deleteMany({}, () => { console.log ('all active games removed'); });
-  await FinishedGameModel.deleteMany({}, () => { console.log ('all finished games removed'); });
-  await PendingMoveModel.deleteMany({}, () => { console.log ('all pending moves removed'); });
+  await PlayerModel.deleteMany({}, () => { console.log('all player data removed'); });
+  await ActiveGameModel.deleteMany({}, () => { console.log('all active games removed'); });
+  await FinishedGameModel.deleteMany({}, () => { console.log('all finished games removed'); });
+  await PendingMoveModel.deleteMany({}, () => { console.log('all pending moves removed'); });
   callback();
 }
 
@@ -61,9 +55,45 @@ function createPlayer(name, callback) {
   });
 }
 
+async function addActiveGame(p1, p2, maxScore, callback) {
+  const p1Object = await (await PlayerModel.findOne({ name: p1 })).get('_id');
+  const p2Object = await (await PlayerModel.findOne({ name: p2 })).get('_id');
+  console.log(p1Object);
+  const game = new ActiveGameModel({
+    p1: p1Object,
+    p2: p2Object,
+    p1Score: 0,
+    p2Score: 0,
+    scoreLimit: 3,
+  });
+  game.save((err) => {
+    if (err) {
+      throw new Error('500 failed to execute adding game');
+    }
+    callback();
+  });
+}
+
+function getAllActiveGames(callback) {
+  ActiveGameModel.find({})
+    .lean()
+    .exec((err, games) => {
+      if (err) {
+        throw new Error('500 failed to execute player lookup');
+      }
+      if (!games) {
+        throw new Error('404 player doesnt exist');
+      }
+      console.log('games');
+      callback(games);
+    });
+}
+
 module.exports = {
   clearAllTables,
   getAllPlayers,
   getPlayerByName,
   createPlayer,
+  addActiveGame,
+  getAllActiveGames,
 };

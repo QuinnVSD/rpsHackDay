@@ -3,18 +3,25 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const session = require('express-session');
 
 const db = require('./db');
 
 const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
 
 const app = express();
+app.set('view engine', 'ejs');
 
 mongoose.connect(url, { useNewUrlParser: true });
 const { connection } = mongoose;
 connection.once('open', () => {
   console.log('MongoDB database connection established successfully');
 });
+app.use(session({
+  secret: 'secret',
+  resave: true,
+  saveUninitialized: true,
+}));
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -44,12 +51,16 @@ function checkP1BeatsP2(moveP1, moveP2) {
 function checkUserInGame(game, uId) {
   return (game.p1.name === uId || game.p2.name === uId);
 }
-
+// I dunno, "hello" page
 app.get('/', (req, res) => {
-  res.send('Hello World!');
+  if (req.session.loggedin) {
+    res.redirect('/home');
+  } else {
+    res.send('Hello World!');
+  }
 });
 
-// post request to / route clears the databases
+// post request to the base / route clears the databases
 app.post('/', async (req, res) => {
   await db.clearAllTables(() => {
     res.status(204)
@@ -57,6 +68,37 @@ app.post('/', async (req, res) => {
   });
 });
 
+// welcomes a logged in user
+app.get('/home', (req, res) => {
+  // if (req.session.loggedin) {
+  //   res.send(`Hello ${req.session.username}!`);
+  // } else {
+  //   res.send('Please login!');
+  // }
+  // res.end();
+});
+
+app.post('/auth', async (req, res) => {
+  const { username, password } = req.body;
+  if (username && password) {
+    if (password === 'secret') {
+      req.session.loggedin = true;
+      req.session.username = username;
+      if (await !db.getPlayerByName(username)) {
+        db.createPlayer(username, () => { });
+      }
+      res.redirect('/home');
+    } else {
+      res.send('Incorrect Username and/or Password!');
+    }
+    res.end();
+  } else {
+    res.send('Please enter Username and Password!');
+    res.end();
+  }
+});
+
+// returns list of all players
 app.get('/players', async (req, res, next) => {
   await db.getAllPlayers((players) => {
     res.status(200)
@@ -64,6 +106,7 @@ app.get('/players', async (req, res, next) => {
   });
 });
 
+// returns single player
 app.get('/players/:username', async (req, res, next) => {
   const { username } = req.params;
   try {
@@ -76,6 +119,7 @@ app.get('/players/:username', async (req, res, next) => {
   }
 });
 
+// creates new player
 app.post('/players/:username', async (req, res, next) => {
   const { username } = req.params;
   try {
@@ -88,7 +132,33 @@ app.post('/players/:username', async (req, res, next) => {
   }
 });
 
-app.get('/result/:gId', async (req, res, next) => {
+// responds with list of all active games
+app.get('/games', async (req, res, next) => {
+  await db.getAllActiveGames((games) => {
+    res.status(200)
+      .json(games);
+  });
+});
+
+// responds of list of all active games that a player is in
+app.get('/games/:player', async (req, res, next) => {
+  const { player } = req.params;
+  await db.getGamesOfPlayer((games) => {
+    res.status(200)
+      .json(games);
+  });
+});
+
+// accepts 2 player names in the body to start a new game between them
+app.post('/games', async (req, res, next) => {
+  const { p1, p2 } = req.body;
+  await db.addActiveGame(p1, p2, 2, () => {
+    res.status(201)
+      .send();
+  });
+});
+
+app.get('/results/:gId', async (req, res, next) => {
   const { gId } = req.params;
   const game = await db.findResultById(gId);
   if (game) {
@@ -99,7 +169,7 @@ app.get('/result/:gId', async (req, res, next) => {
   }
 });
 
-app.get('/game/:gId/:uId', async (req, res, next) => {
+app.get('/games/:gId/:uId', async (req, res, next) => {
   const { gId, uId } = req.params;
   const game = await db.findActiveGame(gId);
   if (game !== undefined && checkUserInGame(game, uId)) {
