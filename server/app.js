@@ -2,26 +2,11 @@
 
 const express = require('express');
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
 const session = require('express-session');
-const autoIncrement = require('mongoose-auto-increment');
-
-mongoose.Promise = global.Promise;
-
-const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
 
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', './views');
-
-mongoose.connect(url, { useNewUrlParser: true });
-const { connection } = mongoose;
-connection.once('open', () => {
-  console.log('MongoDB database connection established successfully');
-});
-autoIncrement.initialize(connection);
-
-const db = require('./db');
 
 app.use(session({
   secret: 'secret',
@@ -31,6 +16,15 @@ app.use(session({
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+
+let db = {
+  players: [],
+  activeGames: [],
+  finishedGame: [],
+  pendingMoves: [],
+  gameIdCounter: 1,
+  userIdCounter: 1,
+};
 
 function errInexistentResult() {
   const err = new Error('There is no completed game with that ID');
@@ -57,6 +51,7 @@ function checkP1BeatsP2(p1Move, p2Move) {
 function checkUserInGame(game, uId) {
   return (game.p1 === uId || game.p2 === uId);
 }
+
 // I dunno, "hello" page
 app.get('/', (req, res) => {
   if (req.session.loggedin) {
@@ -68,10 +63,16 @@ app.get('/', (req, res) => {
 
 // post request to the base / route clears the databases
 app.post('/initialize', async (req, res) => {
-  await db.clearAllTables(() => {
-    res.status(204)
-      .send();
-  });
+  db = {
+    players: [],
+    activeGames: [],
+    finishedGame: [],
+    pendingMoves: [],
+    gameIdCounter: 1,
+    userIdCounter: 1,
+  };
+  res.status(204)
+    .send();
 });
 
 app.get('/login', (req, res) => {
@@ -87,6 +88,21 @@ app.get('/home', (req, res) => {
   }
 });
 
+function getPlayerIndexByName(name) {
+  return db.players.findIndex((item) => item.name === name);
+}
+
+function createPlayer(name) {
+  db.players.push({
+    name,
+    id: db.userIdCounter,
+    gameCount: 0,
+    winCount: 0,
+    activeGames: [],
+  });
+  db.userIdCounter += 1;
+}
+
 // basic authentication. password hardcoded "secret"
 app.post('/auth', async (req, res) => {
   const { username, password } = req.body;
@@ -94,86 +110,89 @@ app.post('/auth', async (req, res) => {
     if (password === 'secret') {
       req.session.loggedin = true;
       req.session.username = username;
-      if (await !db.getPlayerByName(username, () => {
-        db.createPlayer(username, () => { });
-      }));
+      if (getPlayerIndexByName(username) < 0) {
+        createPlayer(username);
+      }
       res.redirect('/home');
     } else {
       res.send('Incorrect Username and/or Password!');
     }
-    res.end();
   } else {
     res.send('Please enter Username and Password!');
-    res.end();
   }
 });
 
 // returns list of all players
-app.get('/players', async (req, res, next) => {
-  await db.getAllPlayers((players) => {
-    res.status(200)
-      .json(players);
-  });
+app.get('/players', async (req, res) => {
+  res.status(200)
+    .json(db.players);
 });
 
 // returns single player
 app.get('/players/:username', async (req, res, next) => {
   const { username } = req.params;
-  try {
-    await db.getPlayerByName(username, (player) => {
-      res.status(200)
-        .json(player);
-    });
-  } catch (e) {
-    next(e);
-  }
+  const playerIndex = getPlayerIndexByName(username);
+  res.status(200)
+    .json(db.players[playerIndex]);
 });
 
 // creates new player
 app.post('/players/:username', async (req, res, next) => {
   const { username } = req.params;
-  try {
-    await db.createPlayer(username, () => {
-      res.status(201)
-        .send();
-    });
-  } catch (e) {
-    next(e);
-  }
+  createPlayer(username);
+  res.status(201)
+    .send();
 });
 
 // responds with list of all active games
 app.get('/games', async (req, res, next) => {
-  await db.getAllActiveGames((games) => {
-    res.status(200)
-      .json(games);
-  });
+  res.status(200)
+    .json(db.activeGames);
 });
 
+// responds with pending moves
 app.get('/secret', async (req, res, next) => {
-  await db.getAllPendingMoves((games) => {
-    res.status(200)
-      .json(games);
-  });
+  res.status(200)
+    .json(db.pendingMoves);
 });
 
 // responds of list of all active games that a player is in
 app.get('/games/:player', async (req, res, next) => {
   const { player } = req.params;
-  await db.getGamesOfPlayer(player, (games) => {
-    res.status(200)
-      .json(games);
-  });
+  const games = db.activeGames.filter((game) => game.p1 === player || game.p2 === player);
+  res.status(200)
+    .json(games);
 });
+
+function addActiveGame(p1, p2, maxScore) {
+  db.activeGames.push({
+    id: db.gameIdCounter,
+    p1: {
+      name: p1,
+      score: 0,
+      moves: [],
+    },
+    p2: {
+      name: p2,
+      score: 0,
+      moves: [],
+    },
+    maxScore,
+  });
+  db.gameIdCounter += 1;
+}
 
 // accepts 2 player names in the body to start a new game between them
 app.post('/games', async (req, res, next) => {
-  const { p1, p2 } = req.body;
-  await db.addActiveGame(p1, p2, 2, () => {
-    res.status(201)
-      .send();
-  });
+  const { p1, p2, maxScore } = req.body;
+  addActiveGame(p1, p2, maxScore);
+  res.status(201)
+    .send();
 });
+
+function getActiveGameIndexById(id) {
+  db.activeGames.findIndex((game) => game.id === id);
+}
 
 // gets a specific game, only works if signed in user is in that game
 app.get('/games/:gId/:user', async (req, res, next) => {
