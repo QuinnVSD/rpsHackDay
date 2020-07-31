@@ -4,10 +4,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const session = require('express-session');
+const autoIncrement = require('mongoose-auto-increment');
 
 mongoose.Promise = global.Promise;
-
-const db = require('./db');
 
 const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
 
@@ -20,6 +19,10 @@ const { connection } = mongoose;
 connection.once('open', () => {
   console.log('MongoDB database connection established successfully');
 });
+autoIncrement.initialize(connection);
+
+const db = require('./db');
+
 app.use(session({
   secret: 'secret',
   resave: true,
@@ -52,7 +55,7 @@ function checkP1BeatsP2(moveP1, moveP2) {
 
 // NEEDS FIXING
 function checkUserInGame(game, uId) {
-  return (game.p1.name === uId || game.p2.name === uId);
+  return (game.p1 === uId || game.p2 === uId);
 }
 // I dunno, "hello" page
 app.get('/', (req, res) => {
@@ -64,7 +67,7 @@ app.get('/', (req, res) => {
 });
 
 // post request to the base / route clears the databases
-app.post('/', async (req, res) => {
+app.post('/initialize', async (req, res) => {
   await db.clearAllTables(() => {
     res.status(204)
       .send();
@@ -84,6 +87,7 @@ app.get('/home', (req, res) => {
   }
 });
 
+// basic authentication. password hardcoded "secret"
 app.post('/auth', async (req, res) => {
   const { username, password } = req.body;
   if (username && password) {
@@ -164,6 +168,41 @@ app.post('/games', async (req, res, next) => {
   });
 });
 
+// gets a specific game, only works if signed in user is in that game
+app.get('/games/:gId/:uId', async (req, res, next) => {
+  const { gId, uId } = req.params;
+  db.getActiveGameById(gId, (game) => {
+    console.log(game);
+    if (game !== undefined && checkUserInGame(game, uId)) {
+      res.status(200)
+        .json(game);
+    } else {
+      next(errWrongGame());
+    }
+  });
+});
+
+app.post('/game/:gId/:uId', async (req, res, next) => {
+  const { gId, uId } = req.params;
+  const game = activeGames.find((g) => g.id === Number(gId));
+  if (game !== undefined && checkUserInGame(game, uId)) {
+    try {
+      if (!submitMove(game, uId)) {
+        res.status(200)
+          .json(game);
+      } else {
+        performRoundCompletion(game);
+      }
+    } catch (e) {
+      const err = e;
+      err.status = 400;
+      next(err);
+    }
+  } else {
+    next(errWrongGame());
+  }
+});
+
 app.get('/results/:gId', async (req, res, next) => {
   const { gId } = req.params;
   const game = await db.findResultById(gId);
@@ -172,17 +211,6 @@ app.get('/results/:gId', async (req, res, next) => {
       .json(game);
   } else {
     next(errInexistentResult());
-  }
-});
-
-app.get('/games/:gId/:uId', async (req, res, next) => {
-  const { gId, uId } = req.params;
-  const game = await db.findActiveGame(gId);
-  if (game !== undefined && checkUserInGame(game, uId)) {
-    res.status(200)
-      .json(game);
-  } else {
-    next(errWrongGame());
   }
 });
 

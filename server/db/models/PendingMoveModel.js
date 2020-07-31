@@ -3,10 +3,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const PendingMoveSchema = new Schema({
-  gameId: {
-    type: Schema.Types.ObjectId,
-    ref: 'activeGame',
-  },
+  gameId: Number,
   p1Move: String,
   p2Move: String,
 });

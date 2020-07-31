@@ -4,12 +4,19 @@ const PlayerModel = require('./models/PlayerModel');
 const ActiveGameModel = require('./models/ActiveGameModel');
 const FinishedGameModel = require('./models/FinishedGameModel');
 const PendingMoveModel = require('./models/PendingMoveModel');
+const GameIdModel = require('./models/GameIdModel');
+const { db } = require('./models/PlayerModel');
 
 async function clearAllTables(callback) {
   await PlayerModel.deleteMany({}, () => { console.log('all player data removed'); });
   await ActiveGameModel.deleteMany({}, () => { console.log('all active games removed'); });
   await FinishedGameModel.deleteMany({}, () => { console.log('all finished games removed'); });
   await PendingMoveModel.deleteMany({}, () => { console.log('all pending moves removed'); });
+  await GameIdModel.deleteMany({}, () => { console.log('game ID counter deleted'); });
+  const gameIdCounter = new GameIdModel({
+    counter: 0,
+  });
+  await gameIdCounter.save();
   callback();
 }
 
@@ -56,10 +63,9 @@ function createPlayer(name, callback) {
 }
 
 async function addActiveGame(p1, p2, maxScore, callback) {
-  const p1Object = await (await PlayerModel.findOne({ name: p1 })).get('_id');
-  const p2Object = await (await PlayerModel.findOne({ name: p2 })).get('_id');
-  console.log(p1Object);
+  const id = await (await GameIdModel.findOne({})).get('counter');
   const game = new ActiveGameModel({
+    id,
     p1,
     p2,
     p1Score: 0,
@@ -114,6 +120,21 @@ async function getGamesOfPlayer(player, callback) {
   setTimeout(() => { callback(games); }, 200);
 }
 
+function getActiveGameById(gId, callback) {
+  ActiveGameModel.findOne({ _id: gId }, (err, game) => {
+    if (err) {
+      throw new Error('500 failed to execute game lookup');
+    }
+    if (!game) {
+      throw new Error('404 game doesnt exist');
+    }
+    callback(game);
+  });
+}
+function findResultById(id, callback) {
+  return true;
+}
+
 module.exports = {
   clearAllTables,
   getAllPlayers,
@@ -122,4 +143,6 @@ module.exports = {
   addActiveGame,
   getAllActiveGames,
   getGamesOfPlayer,
+  findResultById,
+  getActiveGameById,
 };
