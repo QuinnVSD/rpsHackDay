@@ -47,11 +47,6 @@ function checkP1BeatsP2(p1Move, p2Move) {
   return false;
 }
 
-// NEEDS FIXING
-function checkUserInGame(game, uId) {
-  return (game.p1 === uId || game.p2 === uId);
-}
-
 // I dunno, "hello" page
 app.get('/', (req, res) => {
   if (req.session.loggedin) {
@@ -190,67 +185,78 @@ app.post('/games', async (req, res, next) => {
     .send();
 });
 
-function getActiveGameIndexById(id) {
-  db.activeGames.findIndex((game) => game.id === id);
+function getActiveGameById(id) {
+  return db.activeGames.find((game) => game.id === id);
+}
+
+function checkUserInGame(game, user) {
+  return (game.p1.name === user || game.p2.name === user);
 }
 
 // gets a specific game, only works if signed in user is in that game
 app.get('/games/:gId/:user', async (req, res, next) => {
   const { gId, user } = req.params;
-  db.getActiveGameById(gId, (game) => {
-    console.log(game);
-    if (game !== undefined && checkUserInGame(game, user)) {
-      res.status(200)
-        .json(game);
-    } else {
-      next(errWrongGame());
-    }
-  });
+  const game = db.getActiveGameById(gId)
+  if (game && checkUserInGame(game, user)) {
+    res.status(200)
+      .json(game);
+  } else {
+    next(errWrongGame());
+  }
 });
 
+function submitMove(gId, userSide, move) {
+  if (!db.pendingMoves[userSide]) {
+    db.pendingMoves[userSide] = move;
+    if (db.pendingMoves.p1 && db.pendingMoves.p2)
+  }
+}
+
+
+// submits move
 app.post('/games/:gId/:user', async (req, res, next) => {
   const { gId, user } = req.params;
   const { move } = req.body;
   if (move !== 'R' && move !== 'S' && move !== 'P') next();
-  db.getActiveGameById(gId, async (game) => {
-    if (game !== undefined && checkUserInGame(game, user)) {
-      const userSide = (game.p1 === user) ? 'p1' : 'p2';
-      await db.submitMove(gId, userSide, move);
-      db.getHiddenMoves(gId, (pendingMoves) => {
-        // db.assignMovesToPlayers({ gId });
-        console.log(pendingMoves);
-        const { p1, p2 } = pendingMoves;
-        if (p1 && p2) {
-          if (p1 === p2) {
-            db.resetGame(gId);
-          } else {
-            const winner = checkP1BeatsP2(p1, p2) ? 'p1' : 'p2';
-            db.resolveGame(gId, winner);
-          }
+  const game = getActiveGameById(gId);
+  if (game !== undefined && checkUserInGame(game, user)) {
+    const userSide = (game.p1.name === user) ? 'p1' : 'p2';
+    submitMove(gId, userSide, move);
+    db.getHiddenMoves(gId, (pendingMoves) => {
+      // db.assignMovesToPlayers({ gId });
+      console.log(pendingMoves);
+      const { p1, p2 } = pendingMoves;
+      if (p1 && p2) {
+        if (p1 === p2) {
+          db.resetGame(gId);
         } else {
-          res.status(201)
-            .send();
+          const winner = checkP1BeatsP2(p1, p2) ? 'p1' : 'p2';
+          db.resolveGame(gId, winner);
         }
-      });
-      // const otherSide = (userSide === 'p1') ? 'p2' : 'p1';
+      } else {
+        res.status(201)
+          .send();
+      }
+    });
+    // const otherSide = (userSide === 'p1') ? 'p2' : 'p1';
 
-      // db.getHiddenMoves(gId, (pendingMoves) => {
-      //   const { p1Move, p2Move } = pendingMoves;
-      //   if (p1Move && p2Move) {
-      //     if (p1Move === p2Move) {
-      //       db.resetRound(gId);
-      //     } else {
-      //       if (checkP1BeatsP2)
-      //     }
-      //   }
-      // });
-      // db.checkNeedToSubmit(gId, userSide, () => {
-      //   db.checkNeedToSubmit(gId, otherSide, () => {
-      //     return true // first callback asks for next move
-      //   });
-      // });
-    }
-  });
+    // db.getHiddenMoves(gId, (pendingMoves) => {
+    //   const { p1Move, p2Move } = pendingMoves;
+    //   if (p1Move && p2Move) {
+    //     if (p1Move === p2Move) {
+    //       db.resetRound(gId);
+    //     } else {
+    //       if (checkP1BeatsP2)
+    //     }
+    //   }
+    // });
+    // db.checkNeedToSubmit(gId, userSide, () => {
+    //   db.checkNeedToSubmit(gId, otherSide, () => {
+    //     return true // first callback asks for next move
+    //   });
+    // });
+  }
+});
 
   // const game = activeGames.find((g) => g.id === Number(gId));
   // if (game !== undefined && checkUserInGame(game, uId)) {
