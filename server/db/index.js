@@ -60,8 +60,8 @@ async function addActiveGame(p1, p2, maxScore, callback) {
   const p2Object = await (await PlayerModel.findOne({ name: p2 })).get('_id');
   console.log(p1Object);
   const game = new ActiveGameModel({
-    p1: p1Object,
-    p2: p2Object,
+    p1,
+    p2,
     p1Score: 0,
     p2Score: 0,
     scoreLimit: 3,
@@ -89,6 +89,31 @@ function getAllActiveGames(callback) {
     });
 }
 
+async function getGamesOfPlayer(player, callback) {
+  const games = [];
+  await ActiveGameModel.find({ p1: player })
+    .exec((err, g) => {
+      if (err) {
+        throw new Error('500 failed to execute player lookup');
+      }
+      if (!g) {
+        throw new Error('404 player doesnt exist');
+      }
+      g.forEach((item) => games.push(item));
+    });
+  await ActiveGameModel.find({ p2: player })
+    .exec((err, g) => {
+      if (err) {
+        throw new Error('500 failed to execute player lookup');
+      }
+      if (!g) {
+        throw new Error('404 player doesnt exist');
+      }
+      g.forEach((item) => games.push(item));
+    });
+  setTimeout(() => { callback(games); }, 200);
+}
+
 module.exports = {
   clearAllTables,
   getAllPlayers,
@@ -96,4 +121,5 @@ module.exports = {
   createPlayer,
   addActiveGame,
   getAllActiveGames,
+  getGamesOfPlayer,
 };

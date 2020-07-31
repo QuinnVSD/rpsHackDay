@@ -5,12 +5,15 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const session = require('express-session');
 
+mongoose.Promise = global.Promise;
+
 const db = require('./db');
 
 const url = 'mongodb://saltadmin:episalt@localhost/saltreviews';
 
 const app = express();
 app.set('view engine', 'ejs');
+app.set('views', './views');
 
 mongoose.connect(url, { useNewUrlParser: true });
 const { connection } = mongoose;
@@ -56,7 +59,7 @@ app.get('/', (req, res) => {
   if (req.session.loggedin) {
     res.redirect('/home');
   } else {
-    res.send('Hello World!');
+    res.redirect('/login');
   }
 });
 
@@ -68,14 +71,17 @@ app.post('/', async (req, res) => {
   });
 });
 
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
 // welcomes a logged in user
 app.get('/home', (req, res) => {
-  // if (req.session.loggedin) {
-  //   res.send(`Hello ${req.session.username}!`);
-  // } else {
-  //   res.send('Please login!');
-  // }
-  // res.end();
+  if (req.session.loggedin) {
+    res.render('home', { name: req.session.username });
+  } else {
+    res.redirect('/login');
+  }
 });
 
 app.post('/auth', async (req, res) => {
@@ -84,9 +90,9 @@ app.post('/auth', async (req, res) => {
     if (password === 'secret') {
       req.session.loggedin = true;
       req.session.username = username;
-      if (await !db.getPlayerByName(username)) {
+      if (await !db.getPlayerByName(username, () => {
         db.createPlayer(username, () => { });
-      }
+      }));
       res.redirect('/home');
     } else {
       res.send('Incorrect Username and/or Password!');
@@ -143,7 +149,7 @@ app.get('/games', async (req, res, next) => {
 // responds of list of all active games that a player is in
 app.get('/games/:player', async (req, res, next) => {
   const { player } = req.params;
-  await db.getGamesOfPlayer((games) => {
+  await db.getGamesOfPlayer(player, (games) => {
     res.status(200)
       .json(games);
   });
