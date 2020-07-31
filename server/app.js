@@ -44,10 +44,10 @@ function errWrongGame() {
   return err;
 }
 
-function checkP1BeatsP2(moveP1, moveP2) {
-  if ((moveP1 === 'R' && moveP2 === 'S')
-    || (moveP1 === 'S' && moveP2 === 'P')
-    || (moveP1 === 'P' && moveP2 === 'R')) {
+function checkP1BeatsP2(p1Move, p2Move) {
+  if ((p1Move === 'R' && p2Move === 'S')
+    || (p1Move === 'S' && p2Move === 'P')
+    || (p1Move === 'P' && p2Move === 'R')) {
     return true;
   }
   return false;
@@ -150,6 +150,13 @@ app.get('/games', async (req, res, next) => {
   });
 });
 
+app.get('/secret', async (req, res, next) => {
+  await db.getAllPendingMoves((games) => {
+    res.status(200)
+      .json(games);
+  });
+});
+
 // responds of list of all active games that a player is in
 app.get('/games/:player', async (req, res, next) => {
   const { player } = req.params;
@@ -169,11 +176,11 @@ app.post('/games', async (req, res, next) => {
 });
 
 // gets a specific game, only works if signed in user is in that game
-app.get('/games/:gId/:uId', async (req, res, next) => {
-  const { gId, uId } = req.params;
+app.get('/games/:gId/:user', async (req, res, next) => {
+  const { gId, user } = req.params;
   db.getActiveGameById(gId, (game) => {
     console.log(game);
-    if (game !== undefined && checkUserInGame(game, uId)) {
+    if (game !== undefined && checkUserInGame(game, user)) {
       res.status(200)
         .json(game);
     } else {
@@ -182,25 +189,67 @@ app.get('/games/:gId/:uId', async (req, res, next) => {
   });
 });
 
-app.post('/game/:gId/:uId', async (req, res, next) => {
-  const { gId, uId } = req.params;
-  const game = activeGames.find((g) => g.id === Number(gId));
-  if (game !== undefined && checkUserInGame(game, uId)) {
-    try {
-      if (!submitMove(game, uId)) {
-        res.status(200)
-          .json(game);
-      } else {
-        performRoundCompletion(game);
-      }
-    } catch (e) {
-      const err = e;
-      err.status = 400;
-      next(err);
+app.post('/games/:gId/:user', async (req, res, next) => {
+  const { gId, user } = req.params;
+  const { move } = req.body;
+  if (move !== 'R' && move !== 'S' && move !== 'P') next();
+  db.getActiveGameById(gId, async (game) => {
+    if (game !== undefined && checkUserInGame(game, user)) {
+      const userSide = (game.p1 === user) ? 'p1' : 'p2';
+      await db.submitMove(gId, userSide, move);
+      db.getHiddenMoves(gId, (pendingMoves) => {
+        // db.assignMovesToPlayers({ gId });
+        console.log(pendingMoves);
+        const { p1, p2 } = pendingMoves;
+        if (p1 && p2) {
+          if (p1 === p2) {
+            db.resetGame(gId);
+          } else {
+            const winner = checkP1BeatsP2(p1, p2) ? 'p1' : 'p2';
+            db.resolveGame(gId, winner);
+          }
+        } else {
+          res.status(201)
+            .send();
+        }
+      });
+      // const otherSide = (userSide === 'p1') ? 'p2' : 'p1';
+
+      // db.getHiddenMoves(gId, (pendingMoves) => {
+      //   const { p1Move, p2Move } = pendingMoves;
+      //   if (p1Move && p2Move) {
+      //     if (p1Move === p2Move) {
+      //       db.resetRound(gId);
+      //     } else {
+      //       if (checkP1BeatsP2)
+      //     }
+      //   }
+      // });
+      // db.checkNeedToSubmit(gId, userSide, () => {
+      //   db.checkNeedToSubmit(gId, otherSide, () => {
+      //     return true // first callback asks for next move
+      //   });
+      // });
     }
-  } else {
-    next(errWrongGame());
-  }
+  });
+
+  // const game = activeGames.find((g) => g.id === Number(gId));
+  // if (game !== undefined && checkUserInGame(game, uId)) {
+  //   try {
+  //     if (!submitMove(game, uId)) {
+  //       res.status(200)
+  //         .json(game);
+  //     } else {
+  //       performRoundCompletion(game);
+  //     }
+  //   } catch (e) {
+  //     const err = e;
+  //     err.status = 400;
+  //     next(err);
+  //   }
+  // } else {
+  //   next(errWrongGame());
+  // }
 });
 
 app.get('/results/:gId', async (req, res, next) => {

@@ -6,9 +6,6 @@ const { Schema } = mongoose;
 const ActiveGameSchema = new Schema({
   p1: String,
   p2: String,
-  p1Score: Number,
-  p2Score: Number,
-  scoreLimit: Number,
 });
 
 ActiveGameSchema.plugin(autoIncrement.plugin, 'activeGame');

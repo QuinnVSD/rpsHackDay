@@ -65,23 +65,46 @@ function createPlayer(name, callback) {
 async function addActiveGame(p1, p2, maxScore, callback) {
   const id = await (await GameIdModel.findOne({})).get('counter');
   const game = new ActiveGameModel({
-    id,
     p1,
     p2,
-    p1Score: 0,
-    p2Score: 0,
-    scoreLimit: 3,
   });
+
   game.save((err) => {
     if (err) {
       throw new Error('500 failed to execute adding game');
     }
-    callback();
+    const gId = game._id;
+    const pendingMove = new PendingMoveModel({
+      id: gId,
+      p1: '',
+      p2: '',
+    });
+    pendingMove.save((e) => {
+      if (e) {
+        throw new Error('500 failed to execute adding game');
+      }
+      callback();
+    });
   });
 }
 
 function getAllActiveGames(callback) {
   ActiveGameModel.find({})
+    .lean()
+    .exec((err, games) => {
+      if (err) {
+        throw new Error('500 failed to execute player lookup');
+      }
+      if (!games) {
+        throw new Error('404 player doesnt exist');
+      }
+      console.log('games');
+      callback(games);
+    });
+}
+
+function getAllPendingMoves(callback) {
+  PendingMoveModel.find({})
     .lean()
     .exec((err, games) => {
       if (err) {
@@ -120,7 +143,7 @@ async function getGamesOfPlayer(player, callback) {
   setTimeout(() => { callback(games); }, 200);
 }
 
-function getActiveGameById(gId, callback) {
+async function getActiveGameById(gId, callback) {
   ActiveGameModel.findOne({ _id: gId }, (err, game) => {
     if (err) {
       throw new Error('500 failed to execute game lookup');
@@ -131,6 +154,45 @@ function getActiveGameById(gId, callback) {
     callback(game);
   });
 }
+
+async function submitMove(gId, side, move) {
+  if (side === 'p1') {
+    await PendingMoveModel.findOneAndUpdate({ id: gId }, { p1: move});
+  } else {
+    await PendingMoveModel.findOneAndUpdate({ id: gId }, { p2: move});
+  }
+}
+
+async function getHiddenMoves(gId, callback) {
+  PendingMoveModel.findOne({ id: gId }, (data) => {
+    callback(data);
+  });
+}
+
+async function checkNeedToSubmit(gId, userSide, callback) {
+  const movesInfo = await PendingMoveModel.findOne({ _id: gId });
+  if (!movesInfo[userSide]) { // this means move can be submitted
+    callback();
+  }
+}
+
+async function resetGame(gId) {
+  await PendingMoveModel.findOneAndUpdate({ id: gId }, { p1: null, p2: null });
+}
+
+async function resolveGame(gId, winner) {
+  await ActiveGameModel.findOneAndDelete({ id: gId }, (game) => {
+    const winnerName = winner === 'p1' ? game.p1 : game.p2;
+    const finishedGame = new FinishedGameModel({
+      id: game.id,
+      p1: game.p1,
+      p2: game.p2,
+      winner: winnerName,
+    });
+    finishedGame.save();
+  });
+}
+
 function findResultById(id, callback) {
   return true;
 }
@@ -145,4 +207,10 @@ module.exports = {
   getGamesOfPlayer,
   findResultById,
   getActiveGameById,
+  submitMove,
+  getHiddenMoves,
+  checkNeedToSubmit,
+  resetGame,
+  resolveGame,
+  getAllPendingMoves,
 };
